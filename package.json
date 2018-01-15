@@ -15,7 +15,7 @@
 		"LICENSE"
 	],
 	"lint-staged": {
-		"*.{ts,tsx,js,jsx}": [
+		"*.{json,ts,tsx,js,jsx}": [
 			"prettier --write",
 			"git add"
 		]
@@ -25,7 +25,8 @@
 	},
 	"devDependencies": {
 		"@types/debug": "^0.0.30",
-		"@types/redis": "^2.8.4"
+		"@types/redis": "^2.8.4",
+		"lint-staged": "^6.0.0"
 	},
 	"dependencies": {
 		"debug": "^3.1.0"
