@@ -1,6 +1,6 @@
 {
 	"name": "@phiresky/redis-remotify",
-	"version": "0.0.5",
+	"version": "0.1.8",
 	"description": "a tiny library for remote calls and events via redis",
 	"main": "bin/index.js",
 	"typings": "bin/index.d.ts",
@@ -9,6 +9,10 @@
 	"scripts": {
 		"prepublish": "tsc",
 		"precommit": "lint-staged"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/phiresky/redis-remotify"
 	},
 	"files": ["bin", "LICENSE"],
 	"lint-staged": {
