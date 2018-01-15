@@ -2,8 +2,8 @@
 	"name": "@phiresky/redis-remotify",
 	"version": "0.0.3",
 	"description": "a tiny library for remote calls and events via redis",
-	"main": "bin/remotify.js",
-	"typings": "bin/remotify.d.ts",
+	"main": "bin/index.js",
+	"typings": "bin/index.d.ts",
 	"author": "phiresky",
 	"license": "MIT",
 	"scripts": {
