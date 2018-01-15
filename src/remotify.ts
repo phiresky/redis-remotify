@@ -21,7 +21,7 @@ function prepareJsonify(e: any) {
 		const obj: any = {
 			message: e.message,
 			stack: e.stack,
-			name: e.name
+			name: e.name,
 		};
 		for (const k of Object.keys(e)) obj[k] = (e as any)[k];
 		return obj;
@@ -35,7 +35,10 @@ export function getAllRelevantFunctions<T, A extends keyof T>(obj: T): A[] {
 		props = props.concat(Object.getOwnPropertyNames(objProto) as A[]);
 	} while ((objProto = Object.getPrototypeOf(objProto)) !== Object.prototype);
 
-	return props.filter(unbound => unbound !== "constructor" && typeof obj[unbound] === "function");
+	return props.filter(
+		unbound =>
+			unbound !== "constructor" && typeof obj[unbound] === "function",
+	);
 }
 const timedout = Symbol("timedout");
 export class RemotifyListen {
@@ -43,7 +46,10 @@ export class RemotifyListen {
 	subClient: redis.RedisClient;
 	fns = new Map<string, (...args: any[]) => Promise<any>>();
 
-	constructor(private serverid: string, clients: { pub: redis.RedisClient; sub: redis.RedisClient }) {
+	constructor(
+		private serverid: string,
+		clients: { pub: redis.RedisClient; sub: redis.RedisClient },
+	) {
 		this.pubClient = clients.pub;
 		this.subClient = clients.sub;
 		this.subClient.on("message", this.onCall);
@@ -60,24 +66,27 @@ export class RemotifyListen {
 			callback = {
 				callback: data.callback,
 				success: false,
-				result: `unknown function "${fnname}"`
+				result: `unknown function "${fnname}"`,
 			};
 		} else {
 			try {
 				callback = {
 					callback: data.callback,
 					success: true,
-					result: await fn(...data.arguments)
+					result: await fn(...data.arguments),
 				};
 			} catch (e) {
 				callback = {
 					callback: data.callback,
 					success: false,
-					result: prepareJsonify(e)
+					result: prepareJsonify(e),
 				};
 			}
 		}
-		this.pubClient.publish(`/remotify/${this.serverid}/callback/${data.clientid}`, JSON.stringify(callback));
+		this.pubClient.publish(
+			`/remotify/${this.serverid}/callback/${data.clientid}`,
+			JSON.stringify(callback),
+		);
 	};
 	remotifyListen(fn: (...args: any[]) => any, fnname = fn.name) {
 		console.log("listening", fnname);
@@ -86,27 +95,41 @@ export class RemotifyListen {
 	}
 	remotifyListenAll<T>(obj: T, prefix: string) {
 		for (const unbound of getAllRelevantFunctions(obj)) {
-			this.remotifyListen(((obj[unbound] as any) as Function).bind(obj), prefix + "." + unbound);
+			this.remotifyListen(
+				((obj[unbound] as any) as Function).bind(obj),
+				prefix + "." + unbound,
+			);
 		}
 	}
 }
-const reservedNamesArray = [...Object.getOwnPropertyNames(Object.prototype), "inspect"];
-const reservedNames: { [k: string]: boolean } = Object.assign({}, ...reservedNamesArray.map(k => ({ [k]: true })));
+const reservedNamesArray = [
+	...Object.getOwnPropertyNames(Object.prototype),
+	"inspect",
+];
+const reservedNames: { [k: string]: boolean } = Object.assign(
+	{},
+	...reservedNamesArray.map(k => ({ [k]: true })),
+);
 export class Remotify {
 	pubClient: redis.RedisClient;
 	subClient: redis.RedisClient;
-	callbacks = new Map<number, { resolve: (arg: any) => void; reject: (arg: any) => void }>();
+	callbacks = new Map<
+		number,
+		{ resolve: (arg: any) => void; reject: (arg: any) => void }
+	>();
 	cbCounter = 0;
 	constructor(
 		private serverid: string,
 		private clientid: string,
 		clients: { pub: redis.RedisClient; sub: redis.RedisClient },
-		private callbackTimeout = 10000
+		private callbackTimeout = 10000,
 	) {
 		this.pubClient = clients.pub;
 		this.subClient = clients.sub;
 		this.subClient.on("message", this.onCallback);
-		this.subClient.subscribe(`/remotify/${this.serverid}/callback/${clientid}`);
+		this.subClient.subscribe(
+			`/remotify/${this.serverid}/callback/${clientid}`,
+		);
 	}
 	private addCallback<T>() {
 		const id = ++this.cbCounter;
@@ -121,9 +144,9 @@ export class Remotify {
 					reject: (result: any) => {
 						this.callbacks.delete(id);
 						reject(result);
-					}
+					},
 				});
-			})
+			}),
 		};
 	}
 	onCallback = (ns: string, str: string) => {
@@ -145,7 +168,7 @@ export class Remotify {
 			const data: Call = {
 				clientid: this.clientid,
 				callback: id,
-				arguments: args
+				arguments: args,
 			};
 			const timeId = `${fnname} ${id}`;
 			if (debug.enabled) console.time(timeId);
@@ -158,20 +181,27 @@ export class Remotify {
 						else if (listenedCount === 0)
 							rej({
 								cause: "remotifyBackendDown",
-								message: this.serverid + " backend is down or method does not exist"
+								message:
+									this.serverid +
+									" backend is down or method does not exist",
 							});
 						else return res();
-					}
-				)
+					},
+				),
 			);
 			const result = await Promise.race([
 				Promise.all([isDown, promise]),
-				sleep(this.callbackTimeout).then(() => timedout)
+				sleep(this.callbackTimeout).then(() => timedout),
 			]);
 			if (debug.enabled) console.timeEnd(timeId);
 			if (result === timedout) {
 				if (debug.enabled) console.log(timeId, "timeout");
-				return Promise.reject({ cause: "timeout", fnname, args, message: "Timeout" });
+				return Promise.reject({
+					cause: "timeout",
+					fnname,
+					args,
+					message: "Timeout",
+				});
 			} else return (result as any)[1];
 		}) as any) as T;
 	}
@@ -188,8 +218,8 @@ export class Remotify {
 						if (reservedNames[fnname]) return undefined;
 						if (typeof fnname === "symbol") return undefined;
 						return this.remotify(prefix + "." + fnname);
-					}
-				}
+					},
+				},
 			) as T;
 		} else {
 			const obj: any = {};
@@ -205,7 +235,10 @@ export class RedisEventPublisher<T extends { [name: string]: any }> {
 	constructor(private ns: string, private pubClient: redis.RedisClient) {}
 
 	publish<K extends keyof T>(event: K, data: T[K]) {
-		this.pubClient.publish(`/remotifyEvent/${this.ns}`, JSON.stringify({ event, data }));
+		this.pubClient.publish(
+			`/remotifyEvent/${this.ns}`,
+			JSON.stringify({ event, data }),
+		);
 	}
 }
 
@@ -213,7 +246,7 @@ export class RedisEventSubscriber<T extends { [name: string]: any }> {
 	constructor(
 		private ns: string,
 		private subClient: redis.RedisClient,
-		private listener: { [k in keyof T]: (data: T[k]) => void }
+		private listener: { [k in keyof T]: (data: T[k]) => void },
 	) {
 		this.subClient.subscribe(`/remotifyEvent/${this.ns}`);
 		this.subClient.on("message", this.onEvent);

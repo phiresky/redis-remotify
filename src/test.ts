@@ -23,7 +23,10 @@ async function init() {
 	const pub = redis.createClient();
 	const sub = pub.duplicate();
 	if (process.argv[2] === "b") {
-		const r = new Remotify("remotifytest", "cli-" + Math.random(), { pub, sub });
+		const r = new Remotify("remotifytest", "cli-" + Math.random(), {
+			pub,
+			sub,
+		});
 		const squareR = r.remotify<typeof square>(square.name);
 		const testMultiR = r.remotify<typeof testMulti>(testMulti.name);
 		const tester = r.remotifyAll<Tester>("tester", ["test1", "test2"]);

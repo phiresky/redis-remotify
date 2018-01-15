@@ -10,15 +10,9 @@
 		"prepublish": "tsc",
 		"precommit": "lint-staged"
 	},
-	"files": [
-		"lib",
-		"LICENSE"
-	],
+	"files": ["lib", "LICENSE"],
 	"lint-staged": {
-		"*.{json,ts,tsx,js,jsx}": [
-			"prettier --write",
-			"git add"
-		]
+		"*.{json,ts,tsx,js,jsx}": ["prettier --write", "git add"]
 	},
 	"peerDependencies": {
 		"redis": "^2.8.0"
@@ -26,6 +20,7 @@
 	"devDependencies": {
 		"@types/debug": "^0.0.30",
 		"@types/redis": "^2.8.4",
+		"husky": "^0.14.3",
 		"lint-staged": "^6.0.0"
 	},
 	"dependencies": {
