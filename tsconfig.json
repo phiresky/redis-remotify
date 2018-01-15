@@ -1,0 +1,24 @@
+{
+	"compilerOptions": {
+		"module": "commonjs",
+		"target": "es6",
+		"lib": ["es2017"],
+		"allowJs": false,
+		"noEmit": true,
+        "strict": true,
+		"noImplicitAny": true,
+        "noImplicitThis": true,
+		"strictNullChecks": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitReturns": true,
+		"sourceMap": true,
+		"experimentalDecorators": true,
+		"noImplicitUseStrict": true,
+		"noFallthroughCasesInSwitch": true,
+		"newLine": "LF"
+    },
+    "include": [
+        "src"
+    ],
+}
