@@ -22,10 +22,13 @@ class Squarer {
 But you want to use the functions it provides in different processes. With this library, you can start a server process like this:
 
 ```typescript
+import * as redis from "redis";
 import { Listen } from "@phiresky/redis-remotify";
 
 const squarer = new Squarer();
 
+const pub = redis.createClient();
+const sub = redis.createClient();
 const r = new Listen("backend", { pub, sub });
 // add methods to RPC interface with a name like Squarer.square()
 r.listenAll(squarer);
@@ -45,4 +48,4 @@ for (const x of [1, 2, 3, 4, 5, 11]) {
 }
 ```
 
-Of course it also works with single function or other non-class objects. A more complete example can be seen in [examples/elaborate.ts](examples/elaborate.ts).
+Of course it also works with single functions or other non-class objects. A more complete example can be seen in [examples/elaborate.ts](examples/elaborate.ts).
