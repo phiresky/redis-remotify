@@ -14,9 +14,15 @@
 		"type": "git",
 		"url": "https://github.com/phiresky/redis-remotify"
 	},
-	"files": ["bin", "LICENSE"],
+	"files": [
+		"bin",
+		"LICENSE"
+	],
 	"lint-staged": {
-		"*.{json,ts,tsx,js,jsx}": ["prettier --write", "git add"]
+		"*.{json,ts,tsx,js,jsx}": [
+			"prettier --write",
+			"git add"
+		]
 	},
 	"peerDependencies": {
 		"redis": "^2.8.0"
@@ -25,7 +31,11 @@
 		"@types/debug": "^0.0.30",
 		"@types/redis": "^2.8.4",
 		"husky": "^0.14.3",
-		"lint-staged": "^6.0.0"
+		"lint-staged": "^6.0.0",
+		"prettier": "^1.15.3",
+		"redis": "^2.8.0",
+		"ts-node": "^7.0.1",
+		"typescript": "^3.2.1"
 	},
 	"dependencies": {
 		"debug": "^3.1.0"

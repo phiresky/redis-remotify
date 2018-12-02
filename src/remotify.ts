@@ -2,6 +2,8 @@ import * as redis from "redis";
 export { redis };
 import * as _debug from "debug";
 import { sleep } from "./util";
+import * as crypto from "crypto";
+
 const debug = _debug("remotify");
 
 type Call = {
@@ -16,7 +18,10 @@ type Callback = {
 	result: any;
 };
 
-function prepareJsonify(e: any) {
+/**
+ * make sure errors are preserved over the wire
+ */
+function jsonReplacer(_key: string, e: any) {
 	if (e instanceof Error) {
 		const obj: any = {
 			message: e.message,
@@ -28,7 +33,9 @@ function prepareJsonify(e: any) {
 	}
 	return e;
 }
-export function getAllRelevantFunctions<T, A extends keyof T>(obj: T): A[] {
+export function getAllRelevantFunctions<T, A extends Extract<keyof T, string>>(
+	obj: T,
+): A[] {
 	let objProto = obj;
 	let props: A[] = [];
 	do {
@@ -41,7 +48,7 @@ export function getAllRelevantFunctions<T, A extends keyof T>(obj: T): A[] {
 	);
 }
 const timedout = Symbol("timedout");
-export class RemotifyListen {
+export class Listen {
 	pubClient: redis.RedisClient;
 	subClient: redis.RedisClient;
 	fns = new Map<string, (...args: any[]) => Promise<any>>();
@@ -49,12 +56,13 @@ export class RemotifyListen {
 	constructor(
 		private serverid: string,
 		clients: { pub: redis.RedisClient; sub: redis.RedisClient },
+		private config = { jsonReplacer },
 	) {
 		this.pubClient = clients.pub;
 		this.subClient = clients.sub;
 		this.subClient.on("message", this.onCall);
 	}
-	onCall = async (ns: string, str: string) => {
+	private onCall = async (ns: string, str: string) => {
 		const [, _remotify, _serverid, _call, fnname] = ns.split("/");
 		if (_remotify !== "remotify") return;
 		if (_serverid !== this.serverid) return;
@@ -75,27 +83,27 @@ export class RemotifyListen {
 					success: true,
 					result: await fn(...data.arguments),
 				};
-			} catch (e) {
+			} catch (result) {
 				callback = {
 					callback: data.callback,
 					success: false,
-					result: prepareJsonify(e),
+					result,
 				};
 			}
 		}
 		this.pubClient.publish(
 			`/remotify/${this.serverid}/callback/${data.clientid}`,
-			JSON.stringify(callback),
+			JSON.stringify(callback, this.config.jsonReplacer),
 		);
 	};
-	remotifyListen(fn: (...args: any[]) => any, fnname = fn.name) {
+	public listen(fn: (...args: any[]) => any, fnname = fn.name) {
 		console.log("listening", fnname);
 		this.subClient.subscribe(`/remotify/${this.serverid}/call/${fnname}`);
 		this.fns.set(fnname, fn);
 	}
-	remotifyListenAll<T>(obj: T, prefix: string) {
+	public listenAll<T>(obj: T, prefix = obj.constructor.name) {
 		for (const unbound of getAllRelevantFunctions(obj)) {
-			this.remotifyListen(
+			this.listen(
 				((obj[unbound] as any) as Function).bind(obj),
 				prefix + "." + unbound,
 			);
@@ -104,31 +112,45 @@ export class RemotifyListen {
 }
 const reservedNamesArray = [
 	...Object.getOwnPropertyNames(Object.prototype),
-	"inspect",
+	"inspect", // node thing
 ];
 const reservedNames: { [k: string]: boolean } = Object.assign(
 	{},
 	...reservedNamesArray.map(k => ({ [k]: true })),
 );
+
+function randomid() {
+	return crypto.randomBytes(20).toString("hex");
+}
+function defaultConfig() {
+	return {
+		clientid: randomid(),
+		callbackTimeout: 60 * 1000,
+	};
+}
+type Config = ReturnType<typeof defaultConfig>;
+
 export class Remotify {
 	pubClient: redis.RedisClient;
 	subClient: redis.RedisClient;
-	callbacks = new Map<
+	private callbacks = new Map<
 		number,
 		{ resolve: (arg: any) => void; reject: (arg: any) => void }
 	>();
-	cbCounter = 0;
+	private cbCounter = 0;
+	private config: Config;
 	constructor(
 		private serverid: string,
-		private clientid: string,
 		clients: { pub: redis.RedisClient; sub: redis.RedisClient },
-		private callbackTimeout = 10000,
+		config: Partial<Config> = {},
 	) {
 		this.pubClient = clients.pub;
 		this.subClient = clients.sub;
+		this.config = { ...defaultConfig(), ...config };
+
 		this.subClient.on("message", this.onCallback);
 		this.subClient.subscribe(
-			`/remotify/${this.serverid}/callback/${clientid}`,
+			`/remotify/${this.serverid}/callback/${this.config.clientid}`,
 		);
 	}
 	private addCallback<T>() {
@@ -149,7 +171,7 @@ export class Remotify {
 			}),
 		};
 	}
-	onCallback = (ns: string, str: string) => {
+	private onCallback = (ns: string, str: string) => {
 		const [, _remotify, _ns, _callback, ,] = ns.split("/");
 		if (_remotify !== "remotify") return;
 		if (_ns !== this.serverid) return;
@@ -162,11 +184,11 @@ export class Remotify {
 			console.error("can't find callback for", data.callback);
 		}
 	};
-	remotify<T>(fnname: string): T {
+	public remotify<T>(fnname: string): T {
 		return ((async (...args: any[]) => {
 			const { id, promise } = this.addCallback<T>();
 			const data: Call = {
-				clientid: this.clientid,
+				clientid: this.config.clientid,
 				callback: id,
 				arguments: args,
 			};
@@ -178,20 +200,20 @@ export class Remotify {
 					JSON.stringify(data),
 					(err, listenedCount) => {
 						if (err) rej(err);
-						else if (listenedCount === 0)
-							rej({
-								cause: "remotifyBackendDown",
-								message:
-									this.serverid +
+						else if (listenedCount === 0) {
+							const error = new Error(
+								this.serverid +
 									" backend is down or method does not exist",
-							});
-						else return res();
+							);
+							(error as any).cause = "remotifyBackendDown";
+							rej(error);
+						} else return res();
 					},
 				),
 			);
 			const result = await Promise.race([
 				Promise.all([isDown, promise]),
-				sleep(this.callbackTimeout).then(() => timedout),
+				sleep(this.config.callbackTimeout).then(() => timedout),
 			]);
 			if (debug.enabled) console.timeEnd(timeId);
 			if (result === timedout) {
@@ -209,14 +231,14 @@ export class Remotify {
 	 *
 	 * @param fnnames array of functions to forward. if null, return a proxy that implicitly forwards every function
 	 */
-	remotifyAll<T>(prefix: string, fnnames: string[] | null = null): T {
+	public remotifyAll<T>(prefix: string, fnnames: string[] | null = null): T {
 		if (fnnames === null) {
 			return new Proxy(
 				{},
 				{
 					get: (_, fnname) => {
-						if (reservedNames[fnname]) return undefined;
 						if (typeof fnname === "symbol") return undefined;
+						if (reservedNames[fnname]) return undefined;
 						return this.remotify(prefix + "." + fnname);
 					},
 				},
@@ -228,6 +250,18 @@ export class Remotify {
 			}
 			return obj as T;
 		}
+	}
+
+	public remotifyFunction<T extends (...args: any[]) => any>(fn: T) {
+		return this.remotify<typeof fn>(fn.name);
+	}
+
+	public remotifyClass<T>(
+		cls: new (...args: any[]) => T,
+		prefix: string = cls.name,
+	): T {
+		const fns = getAllRelevantFunctions(cls.prototype);
+		return this.remotifyAll<T>(prefix, fns);
 	}
 }
 
