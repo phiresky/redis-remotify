@@ -18,5 +18,5 @@
 		"noFallthroughCasesInSwitch": true,
 		"newLine": "LF"
 	},
-	"include": ["src", "examples"]
+	"include": ["src"]
 }
