@@ -14,9 +14,27 @@ type Call = {
 
 type Callback = {
 	callback: number;
+	method: string;
 	success: boolean;
 	result: any;
 };
+const console = (console => ({
+	log(...args: any[]) {
+		console.log("remotify", ...args);
+	},
+	warn(...args: any[]) {
+		console.warn("remotify", ...args);
+	},
+	error(...args: any[]) {
+		console.error("remotify", ...args);
+	},
+	time(label: string) {
+		console.time(label);
+	},
+	timeEnd(label: string) {
+		console.timeEnd(label);
+	},
+}))(global.console);
 
 /**
  * make sure errors are preserved over the wire
@@ -72,6 +90,7 @@ export class Listen {
 		const data: Call = JSON.parse(str);
 		if (!fn) {
 			callback = {
+				method: ns,
 				callback: data.callback,
 				success: false,
 				result: `unknown function "${fnname}"`,
@@ -79,21 +98,32 @@ export class Listen {
 		} else {
 			try {
 				callback = {
+					method: ns,
 					callback: data.callback,
 					success: true,
 					result: await fn(...data.arguments),
 				};
 			} catch (result) {
 				callback = {
+					method: ns,
 					callback: data.callback,
 					success: false,
 					result,
 				};
 			}
 		}
+		const callbackPath = `/remotify/${this.serverid}/callback/${
+			data.clientid
+		}`;
 		this.pubClient.publish(
-			`/remotify/${this.serverid}/callback/${data.clientid}`,
+			callbackPath,
 			JSON.stringify(callback, this.config.jsonReplacer),
+			(err, listenedCount) => {
+				if (err) console.error("callback", callbackPath, err);
+				else if (listenedCount === 0) {
+					console.warn("client is down", callback.method, callbackPath);
+				}
+			},
 		);
 	};
 	public listen(fn: (...args: any[]) => any, fnname = fn.name) {
@@ -101,7 +131,7 @@ export class Listen {
 		this.subClient.subscribe(`/remotify/${this.serverid}/call/${fnname}`);
 		this.fns.set(fnname, fn);
 	}
-	public listenAll<T>(obj: T, prefix = obj.constructor.name) {
+	public listenAll<T extends object>(obj: T, prefix = obj.constructor.name) {
 		for (const unbound of getAllRelevantFunctions(obj)) {
 			this.listen(
 				((obj[unbound] as any) as Function).bind(obj),
@@ -120,11 +150,11 @@ const reservedNames: { [k: string]: boolean } = Object.assign(
 );
 
 function randomid() {
-	return crypto.randomBytes(20).toString("hex");
+	return crypto.randomBytes(10).toString("hex");
 }
 function defaultConfig() {
 	return {
-		clientid: randomid(),
+		clientid: "unnamed",
 		callbackTimeout: 60 * 1000,
 	};
 }
@@ -147,10 +177,10 @@ export class Remotify {
 		this.pubClient = clients.pub;
 		this.subClient = clients.sub;
 		this.config = { ...defaultConfig(), ...config };
-
+		this.config.clientid = this.config.clientid + "_" + randomid();
 		this.subClient.on("message", this.onCallback);
 		this.subClient.subscribe(
-			`/remotify/${this.serverid}/callback/${this.config.clientid}`,
+			`/remotify/${this.serverid}/callback/${this.config.clientid}`
 		);
 	}
 	private addCallback<T>() {
@@ -181,7 +211,11 @@ export class Remotify {
 		if (cb) {
 			(data.success ? cb.resolve : cb.reject)(data.result);
 		} else {
-			console.error("can't find callback for", data.callback);
+			console.error(
+				"can't find callback for",
+				data.method,
+				data.callback,
+			);
 		}
 	};
 	public remotify<T>(fnname: string): T {

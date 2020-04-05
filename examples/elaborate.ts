@@ -1,4 +1,5 @@
 import { Remotify, Listen } from "../src/remotify";
+import { sleep } from "../src/util";
 import * as redis from "redis";
 
 const mode = process.argv[2];
@@ -19,6 +20,7 @@ class Tester {
 	x = 1;
 
 	async test1(y: number) {
+		await sleep(500);
 		return y + this.x;
 	}
 }
@@ -26,11 +28,13 @@ class Tester {
 async function init() {
 	const pub = redis.createClient();
 	const sub = pub.duplicate();
+
 	if (mode === "client") {
 		const r = new Remotify("remotifytest", {
 			pub,
 			sub,
 		});
+		await sleep(100);
 		const squareR = r.remotifyFunction(square);
 		// same thing but by name (this way the function won't be imported into your client process at all)
 		const testMultiR = r.remotify<typeof testMulti>(testMulti.name);
